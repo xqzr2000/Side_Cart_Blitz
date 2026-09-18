@@ -25,9 +25,18 @@
           </div>
           <button class="text-button" id="editBudget">Edit</button>
         </div>
-        <div class="progress" aria-hidden="true"><span id="budgetProgress"></span></div>
+        <div class="progress" id="budgetBar" role="img" aria-label="Budget breakdown">
+          <span class="seg spent" id="segSpent"></span>
+          <span class="seg reserved" id="segReserved"></span>
+        </div>
+        <div class="bar-legend">
+          <span><i class="dot spent"></i>bought</span>
+          <span><i class="dot reserved"></i>reserved</span>
+          <span><i class="dot free"></i>free</span>
+        </div>
         <div class="metrics">
           <div><span>Bought</span><strong id="spentValue">$0</strong></div>
+          <div class="reserved-metric"><span>Reserved</span><strong id="reservedValue">$0</strong></div>
           <div><span>Still free</span><strong id="remainingValue">$0</strong></div>
           <div><span>Considering</span><strong id="consideringValue">$0</strong></div>
         </div>
@@ -37,6 +46,17 @@
       <section class="nudge hidden" id="purchaseNudge">
         <span id="purchaseNudgeText"></span>
         <button id="dismissNudge" class="text-button">Got it</button>
+      </section>
+
+      <section class="section-block" id="goalsBlock">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">reserved before you spend</p>
+            <h2>Savings goals</h2>
+          </div>
+          <button class="text-button" id="addGoal">+ New goal</button>
+        </div>
+        <div class="goals" id="goalCards"></div>
       </section>
 
       <section class="section-block">
@@ -82,16 +102,20 @@
 
       <section class="agent-intro">
         <div><span class="avatar mom">M</span><p><strong>Mom</strong><br><small>guards the wallet</small></p></div>
-        <div><span class="avatar bestie">B</span><p><strong>Bestie</strong><br><small>keeps bills in view</small></p></div>
+        <div><span class="avatar bestie">B</span><p><strong>Bestie</strong><br><small>plans and builds</small></p></div>
       </section>
 
       <div class="chat-log" id="chatLog"></div>
 
+      <div class="activity hidden" id="activity" aria-live="polite"></div>
+
+      <div class="quick-chips" id="quickChips"></div>
+
       <form class="composer" id="chatForm">
-        <textarea id="chatInput" rows="2" maxlength="1800" placeholder="Should I buy this? What am I forgetting?"></textarea>
+        <textarea id="chatInput" rows="2" maxlength="1800" placeholder="Should I buy this? What am I saving for?"></textarea>
         <button id="sendChat" type="submit">Send</button>
       </form>
-      <p class="privacy-note">Only your budget snapshot and recent chat are sent to your configured Node backend.</p>
+      <p class="privacy-note">Only your budget snapshot, goals and recent chat are sent to your configured Node backend.</p>
     </section>
   </main>
 
@@ -116,6 +140,54 @@
       <p class="small-note">Bestie only mentions bills you enter here.</p>
 
       <button class="primary-button" id="saveBudget" value="default">Save budget</button>
+    </form>
+  </dialog>
+
+  <dialog id="goalDialog">
+    <form method="dialog" id="goalForm">
+      <div class="dialog-head">
+        <div><p class="eyebrow">savings goal</p><h2 id="goalDialogTitle">New goal</h2></div>
+        <button class="icon-button" value="cancel" aria-label="Close" type="submit" formnovalidate>×</button>
+      </div>
+
+      <div class="goal-form-row">
+        <label class="field">Icon
+          <input id="goalEmojiInput" maxlength="4" placeholder="🎯" />
+        </label>
+        <label class="field">Name
+          <input id="goalNameInput" required maxlength="60" placeholder="Coachella Fund" />
+        </label>
+      </div>
+      <div class="goal-form-row">
+        <label class="field">Target
+          <input id="goalTargetInput" type="number" min="1" step="0.01" inputmode="decimal" required />
+        </label>
+        <label class="field">Per month
+          <input id="goalMonthlyInput" type="number" min="0" step="0.01" inputmode="decimal" />
+        </label>
+      </div>
+      <label class="field">Target date (optional)
+        <input id="goalDateInput" type="date" />
+      </label>
+      <p class="small-note" id="goalFormHint"></p>
+
+      <button class="primary-button" id="saveGoal" value="default">Save goal</button>
+    </form>
+  </dialog>
+
+  <dialog id="contributeDialog">
+    <form method="dialog" id="contributeForm">
+      <div class="dialog-head">
+        <div><p class="eyebrow">add money</p><h2 id="contributeTitle">Add to fund</h2></div>
+        <button class="icon-button" value="cancel" aria-label="Close" type="submit" formnovalidate>×</button>
+      </div>
+      <label class="field">Amount
+        <input id="contributeInput" type="number" min="0.01" step="0.01" inputmode="decimal" required />
+      </label>
+      <label class="field">Note (optional)
+        <input id="contributeNote" maxlength="120" placeholder="Skipped the Switch bundle" />
+      </label>
+      <button class="primary-button" value="default">Add to fund</button>
     </form>
   </dialog>
 

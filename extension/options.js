@@ -5,6 +5,8 @@ const status = document.getElementById('status');
 document.addEventListener('DOMContentLoaded', load);
 document.getElementById('optionsForm').addEventListener('submit', save);
 document.getElementById('testConnection').addEventListener('click', testConnection);
+document.getElementById('loadDemo').addEventListener('click', loadDemo);
+document.getElementById('clearAll').addEventListener('click', clearAll);
 
 async function load() {
   const { settings = {} } = await chrome.storage.local.get('settings');
@@ -34,7 +36,12 @@ async function testConnection() {
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
-    showStatus(`Connected. OpenRouter key: ${data.openRouterConfigured ? 'configured' : 'missing'}. Model: ${data.model}.`);
+    const extras = [
+      `${data.tools?.length || 0} agent tools`,
+      data.streaming ? 'live progress' : 'no streaming',
+      data.webSearch ? 'web search on' : 'web search off',
+    ].join(' · ');
+    showStatus(`Connected. OpenRouter key: ${data.openRouterConfigured ? 'configured' : 'missing'}. Model: ${data.model}. ${extras}.`);
   } catch (error) {
     showStatus(`Connection failed: ${error.message}`);
   }
@@ -42,4 +49,40 @@ async function testConnection() {
 
 function showStatus(text) {
   status.textContent = text;
+}
+
+function showDemoStatus(text) {
+  document.getElementById('demoStatus').textContent = text;
+}
+
+// The connection settings are the one thing worth keeping across a reset —
+// re-typing a Codespaces URL mid-demo is exactly the wrong moment for it.
+async function replaceState(next) {
+  const { settings = {} } = await chrome.storage.local.get('settings');
+  await chrome.storage.local.set({
+    ...next,
+    settings: {
+      ...next.settings,
+      backendUrl: settings.backendUrl || backendUrl.value.trim() || 'http://localhost:8787',
+      sharedSecret: settings.sharedSecret ?? sharedSecret.value,
+    },
+  });
+}
+
+async function loadDemo() {
+  const demo = buildDemoState();
+  await replaceState(demo);
+  const bought = demo.items.filter((item) => item.status === 'bought').length;
+  showDemoStatus(`Loaded: CA$900 budget, ${demo.settings.bills.length} bills, ${bought} bought and ${demo.items.length - bought} considering. Open the side panel.`);
+}
+
+async function clearAll() {
+  await replaceState({
+    items: [],
+    goals: [],
+    chatMessages: [],
+    purchaseNudge: null,
+    settings: { budget: 500, currency: 'USD', bills: [] },
+  });
+  showDemoStatus('Cleared. Budget reset to $500 USD.');
 }

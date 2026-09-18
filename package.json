@@ -2,11 +2,11 @@
   "name": "cartside-blitz",
   "version": "0.1.0",
   "private": true,
-  "description": "Gentle shopping-budget Chrome side panel with Mom + Bestie OpenRouter agents.",
+  "description": "Gentle shopping-budget Chrome side panel where Mom + Bestie research goals, build savings plans, and reserve money from your budget.",
   "scripts": {
     "dev": "node --watch backend/server.js",
     "start": "node backend/server.js",
-    "check": "node --check backend/server.js && node --check backend/agents.js && node --check extension/service-worker.js && node --check extension/content.js && node --check extension/sidepanel.js && node --check extension/options.js",
+    "check": "for f in backend/*.js extension/*.js; do node --check \"$f\" || exit 1; done",
     "test": "node --test backend/*.test.js"
   },
   "engines": {

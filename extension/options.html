@@ -29,7 +29,19 @@
       </div>
       <p id="status" role="status"></p>
     </form>
+
+    <section class="demo-block">
+      <h2>Demo data</h2>
+      <p>Loads a first-year student budget in CAD — CA$900 a month, four bills, a month that is already mostly spent, and a cart with some slack in it. Use it to run Demo-1 and Demo-2 from a known starting point.</p>
+      <div class="actions">
+        <button type="button" class="secondary" id="loadDemo">Load demo data</button>
+        <button type="button" class="secondary" id="clearAll">Clear everything</button>
+      </div>
+      <p class="warn">Both buttons replace your current cart, goals, bills and chat history.</p>
+      <p id="demoStatus" role="status"></p>
+    </section>
   </main>
+  <script src="demo-data.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

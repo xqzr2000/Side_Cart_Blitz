@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CartSide Budget Companion",
-  "version": "0.1.0",
-  "description": "A gentle side-panel budget companion for shopping, with Mom + Bestie chat.",
+  "version": "0.2.0",
+  "description": "A gentle side-panel budget companion: track a shopping cart, and let Mom + Bestie turn what you want into a savings plan.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "sidePanel"],
   "host_permissions": [
