@@ -567,6 +567,11 @@ function renderChat() {
   }
 
   for (const message of state.chatMessages.slice(-40)) {
+    if (message.kind === 'proposal' && message.proposal) {
+      log.append(buildProposalCard(message.proposal));
+      continue;
+    }
+
     if (message.kind === 'action') {
       const receipt = document.createElement('div');
       receipt.className = 'receipt';
@@ -611,7 +616,7 @@ function completeActivity(key) {
 
 function outboundMessages(history) {
   return history
-    .filter((message) => message.kind !== 'action' && (message.role === 'user' || message.role === 'assistant'))
+    .filter((message) => !message.kind && (message.role === 'user' || message.role === 'assistant'))
     .map(({ role, content }) => ({ role, content }));
 }
 
@@ -768,7 +773,17 @@ async function applyActions(actions) {
   let goals = [...state.goals];
   const receipts = [];
 
+  const offers = [];
+
   for (const action of actions) {
+    if (action.type === 'propose_goal' && action.proposal?.goal?.id) {
+      offers.push(action.proposal);
+      continue;
+    }
+    if (action.type === 'propose_removal' && action.proposal?.items?.length) {
+      offers.push(action.proposal);
+      continue;
+    }
     if (action.type === 'create_goal' && action.goal?.id) {
       if (goals.some((goal) => goal.id === action.goal.id)) continue;
       goals = [finalizeGoal({ ...action.goal }), ...goals];
@@ -799,9 +814,203 @@ async function applyActions(actions) {
     }
   }
 
-  if (!receipts.length) return;
-  await saveGoals(goals);
-  await appendMessages(receipts.map((content) => ({ role: 'system', kind: 'action', content, at: Date.now() })));
+  if (receipts.length) {
+    await saveGoals(goals);
+    await appendMessages(receipts.map((content) => ({ role: 'system', kind: 'action', content, at: Date.now() })));
+  }
+
+  // Offers are appended last so they sit under the message that explains them.
+  if (offers.length) {
+    await appendMessages(offers.map((proposal) => ({ role: 'system', kind: 'proposal', proposal, at: Date.now() })));
+  }
+}
+
+/* ------------------------------------------------------- proposals ------- */
+
+async function updateProposal(proposalId, patch) {
+  state.chatMessages = state.chatMessages.map((message) =>
+    message.kind === 'proposal' && message.proposal?.id === proposalId
+      ? { ...message, proposal: { ...message.proposal, ...patch } }
+      : message,
+  );
+  await chrome.storage.local.set({ chatMessages: state.chatMessages });
+}
+
+async function acceptGoalProposal(proposal) {
+  const goal = finalizeGoal({ ...proposal.goal });
+  if (state.goals.some((entry) => entry.id === goal.id)) return;
+
+  await saveGoals([goal, ...state.goals]);
+  await updateProposal(proposal.id, { status: 'accepted' });
+  await appendMessages([{
+    role: 'system',
+    kind: 'action',
+    content: `${goal.emoji || '🎯'} Created “${goal.name}” — ${money(goal.monthlyContribution, goal.currency)}/month reserved toward ${money(goal.targetAmount, goal.currency)}`,
+    at: Date.now(),
+  }]);
+}
+
+async function acceptRemovalProposal(proposal, fingerprints) {
+  const picked = new Set(fingerprints);
+  const removed = state.items.filter((item) => picked.has(item.fingerprint));
+  if (!removed.length) return;
+
+  const currency = state.settings.currency;
+  const freed = removed
+    .filter((item) => !item.currency || item.currency === currency)
+    .reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1), 0);
+
+  const items = state.items.filter((item) => !picked.has(item.fingerprint));
+  state.items = items;
+  await chrome.storage.local.set({ items });
+  await updateProposal(proposal.id, { status: 'accepted', acceptedFingerprints: [...picked] });
+  await appendMessages([{
+    role: 'system',
+    kind: 'action',
+    content: `🧹 Removed ${removed.length} item${removed.length === 1 ? '' : 's'} — ${money(freed, currency)} back in your budget`,
+    at: Date.now(),
+  }]);
+}
+
+async function declineProposal(proposal) {
+  await updateProposal(proposal.id, { status: 'declined' });
+}
+
+function buildProposalCard(proposal) {
+  const card = document.createElement('div');
+  card.className = `proposal ${proposal.status}`;
+
+  const head = document.createElement('p');
+  head.className = 'proposal-head';
+  head.textContent = proposal.headline || 'Want me to do this?';
+  card.append(head);
+
+  const picked = new Set();
+  const body = document.createElement('div');
+  body.className = 'proposal-body';
+
+  if (proposal.type === 'create_goal') {
+    body.append(buildGoalPreview(proposal.goal));
+  } else {
+    for (const item of proposal.items) {
+      const gone = !state.items.some((entry) => entry.fingerprint === item.fingerprint);
+      const row = document.createElement('label');
+      row.className = `proposal-item${gone ? ' gone' : ''}`;
+
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = item.recommended && !gone;
+      box.disabled = gone || proposal.status !== 'pending';
+      if (box.checked) picked.add(item.fingerprint);
+      box.addEventListener('change', () => {
+        if (box.checked) picked.add(item.fingerprint);
+        else picked.delete(item.fingerprint);
+        refreshTotal();
+      });
+
+      const text = document.createElement('div');
+      const title = document.createElement('p');
+      title.className = 'proposal-item-title';
+      title.textContent = item.price == null
+        ? item.title
+        : `${item.title} · ${money(item.price, item.currency || proposal.currency)}`;
+      const reason = document.createElement('p');
+      reason.className = 'proposal-item-reason';
+      reason.textContent = gone ? 'Already gone from your cart.' : item.reason || '';
+      text.append(title, reason);
+
+      row.append(box, text);
+      body.append(row);
+    }
+  }
+  card.append(body);
+
+  const total = document.createElement('p');
+  total.className = 'proposal-total';
+  card.append(total);
+
+  function sumOf(fingerprints) {
+    return proposal.items
+      .filter((item) => fingerprints.has(item.fingerprint))
+      .reduce((acc, item) => acc + Number(item.price || 0), 0);
+  }
+
+  function refreshTotal() {
+    if (proposal.type === 'create_goal') {
+      total.textContent = `Reserves ${money(proposal.goal.monthlyContribution, proposal.goal.currency)} a month from your free budget.`;
+      return;
+    }
+
+    // Once it is settled the line reports what happened, not what is ticked.
+    if (proposal.status === 'accepted') {
+      const taken = new Set(proposal.acceptedFingerprints || []);
+      total.textContent = `Removed ${taken.size} of ${proposal.items.length} · freed ${money(sumOf(taken), proposal.currency)}`;
+      return;
+    }
+    if (proposal.status === 'declined') {
+      total.textContent = `Kept all ${proposal.items.length}.`;
+      return;
+    }
+
+    total.textContent = picked.size
+      ? `${picked.size} selected · frees ${money(sumOf(picked), proposal.currency)}`
+      : 'Nothing selected.';
+  }
+  refreshTotal();
+
+  if (proposal.status !== 'pending') {
+    const done = document.createElement('p');
+    done.className = 'proposal-done';
+    done.textContent = proposal.status === 'accepted' ? '✓ Done' : 'Dismissed — nothing changed.';
+    card.append(done);
+    return card;
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'proposal-actions';
+
+  const confirm = document.createElement('button');
+  confirm.className = 'proposal-confirm';
+  confirm.textContent = proposal.confirmLabel || 'Yes, do it';
+  confirm.addEventListener('click', async () => {
+    confirm.disabled = true;
+    if (proposal.type === 'create_goal') return acceptGoalProposal(proposal);
+    if (!picked.size) return declineProposal(proposal);
+    return acceptRemovalProposal(proposal, [...picked]);
+  });
+
+  const decline = document.createElement('button');
+  decline.className = 'proposal-decline';
+  decline.textContent = proposal.declineLabel || 'Not now';
+  decline.addEventListener('click', () => declineProposal(proposal));
+
+  actions.append(confirm, decline);
+  card.append(actions);
+  return card;
+}
+
+function buildGoalPreview(goal) {
+  const preview = document.createElement('div');
+  preview.className = 'goal-preview';
+
+  const head = document.createElement('p');
+  head.className = 'goal-preview-name';
+  head.textContent = `${goal.emoji || '🎯'} ${goal.name}`;
+
+  const figures = document.createElement('p');
+  figures.className = 'goal-preview-figures';
+  figures.textContent = `${money(goal.monthlyContribution, goal.currency)}/mo → ${money(goal.targetAmount, goal.currency)}`;
+  if (goal.projectedReadyDate) figures.textContent += ` · ready ${shortDate(goal.projectedReadyDate)}`;
+
+  preview.append(head, figures);
+
+  if (goal.rationale) {
+    const why = document.createElement('p');
+    why.className = 'goal-preview-why';
+    why.textContent = goal.rationale;
+    preview.append(why);
+  }
+  return preview;
 }
 
 function setSending(sending) {

@@ -179,6 +179,13 @@ async function runAgent({ agent, conversation, context, toolContext, sessionId, 
 function describeActions(actions = []) {
   return actions
     .map((action) => {
+      if (action.type === 'propose_goal') {
+        const { goal } = action.proposal;
+        return `offered a savings card "${goal.name}" targeting ${goal.targetAmount} ${goal.currency} at ${goal.monthlyContribution}/month, which the user has NOT accepted yet`;
+      }
+      if (action.type === 'propose_removal') {
+        return `offered to remove ${action.proposal.items.length} cart item(s), which the user has NOT accepted yet`;
+      }
       if (action.type === 'create_goal') {
         return `created the savings card "${action.goal.name}" targeting ${action.goal.targetAmount} ${action.goal.currency}, reserving ${action.goal.monthlyContribution}/month`;
       }
@@ -235,7 +242,7 @@ async function runRoom({ body, emit = () => {} }) {
 
   try {
     const momContext = toolContext.actions.length
-      ? `${buildBudgetContext({ ...state, goals: toolContext.goals }, { userMessage })}\n\nJUST NOW IN THIS ROOM: Bestie ${describeActions(toolContext.actions)}.`
+      ? `${buildBudgetContext({ ...state, goals: toolContext.goals }, { userMessage })}\n\nJUST NOW IN THIS ROOM: Bestie ${describeActions(toolContext.actions)}. Anything marked as not accepted yet is still only an offer on screen.`
       : context;
     const mom = await runAgent({ agent: AGENTS.Mom, conversation: momConversation, context: momContext, toolContext, sessionId, emit });
     replies.push(mom);

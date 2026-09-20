@@ -61,9 +61,9 @@ const TOOL_SPECS = [
   {
     type: 'function',
     function: {
-      name: 'create_savings_goal',
+      name: 'propose_savings_goal',
       description:
-        'Create the savings card in the app and reserve the monthly amount from the budget. Call this once the user has agreed, or when they clearly asked you to set it up.',
+        'Show the user a confirmation card for a savings goal. This does NOT create anything — it puts a "Create it / Not now" card in the chat and the user decides. Call it once you have a plan worth offering, then ask them in your reply whether you should set it up.',
       parameters: {
         type: 'object',
         properties: {
@@ -83,6 +83,34 @@ const TOOL_SPECS = [
           },
         },
         required: ['name', 'targetAmount'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'propose_cart_cleanup',
+      description:
+        'Show the user a confirmation card listing cart items you think they should drop. This does NOT remove anything — the user ticks which ones to remove and confirms. Use it after analysing an over-budget cart. Only name items that are really in their cart.',
+      parameters: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            description: 'The items to offer for removal, most worth dropping first.',
+            items: {
+              type: 'object',
+              properties: {
+                item: { type: 'string', description: 'The item title exactly as it appears in the cart, or its fingerprint.' },
+                reason: { type: 'string', description: 'One short, zero-guilt sentence on why this one.' },
+                recommended: { type: 'boolean', description: 'False to leave it unticked as a borderline call. Defaults to true.' },
+              },
+              required: ['item', 'reason'],
+            },
+          },
+          headline: { type: 'string', description: 'Short question for the card, e.g. "Drop these to get back under budget?"' },
+        },
+        required: ['items'],
       },
     },
   },
@@ -163,7 +191,8 @@ const TOOL_SPECS = [
 const TOOL_LABELS = {
   estimate_goal_costs: 'Researching what this actually costs',
   draft_savings_plan: 'Running the numbers against your budget',
-  create_savings_goal: 'Creating your savings card',
+  propose_savings_goal: 'Drafting your savings card',
+  propose_cart_cleanup: 'Picking what to drop',
   update_savings_goal: 'Updating your savings card',
   contribute_to_goal: 'Adding money to your fund',
   list_savings_candidates: 'Scanning your cart for savings',
@@ -195,6 +224,10 @@ function normalizeBreakdown(lineItems, limit = MAX_BREAKDOWN_ITEMS) {
       amount: clampNumber(item.amount),
       note: clampText(item.note, 160),
     }));
+}
+
+function newProposalId() {
+  return `prop_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 }
 
 function newGoalId() {
@@ -253,6 +286,9 @@ function buildToolContext(state = {}, now = new Date()) {
     capacity,
     candidates: findSavingsOpportunities({ items, bills, currency }),
     scratch: {},
+    // Goals that exist only inside a pending proposal. Suggestions can attach to
+    // them, but nothing here is real until the user confirms in the side panel.
+    pendingGoals: [],
     actions: [],
   };
 }
@@ -331,7 +367,7 @@ const HANDLERS = {
     };
   },
 
-  create_savings_goal(args, ctx) {
+  propose_savings_goal(args, ctx) {
     const name = clampText(args.name, 60) || 'Savings Goal';
     const targetAmount = clampNumber(args.targetAmount) || ctx.scratch.estimate?.total || 0;
     if (!targetAmount) return { ok: false, error: 'targetAmount is required and must be above zero.' };
@@ -339,6 +375,10 @@ const HANDLERS = {
     const existing = ctx.goals.find((goal) => String(goal.name).toLowerCase() === name.toLowerCase());
     if (existing) {
       return { ok: false, error: `A goal named "${name}" already exists. Use update_savings_goal instead.`, goalId: existing.id };
+    }
+    const alreadyOffered = ctx.pendingGoals.find((goal) => String(goal.name).toLowerCase() === name.toLowerCase());
+    if (alreadyOffered) {
+      return { ok: false, error: `You already put a "${name}" card up for confirmation this turn.`, goalId: alreadyOffered.id };
     }
 
     // Only inherit the reference disclaimer when the breakdown itself came from
@@ -379,24 +419,111 @@ const HANDLERS = {
       updatedAt: Date.now(),
     };
 
-    ctx.goals.push(goal);
-    ctx.reserved = round(ctx.reserved + goal.monthlyContribution);
-    ctx.actions.push({ type: 'create_goal', goal });
+    ctx.pendingGoals.push(goal);
+    ctx.actions.push({
+      type: 'propose_goal',
+      proposal: {
+        id: newProposalId(),
+        type: 'create_goal',
+        status: 'pending',
+        headline: clampText(args.headline, 120) || `Set up "${goal.name}"?`,
+        confirmLabel: 'Create it',
+        declineLabel: 'Not now',
+        currency: ctx.currency,
+        goal,
+        createdAt: Date.now(),
+      },
+    });
 
     return {
       ok: true,
+      proposed: true,
       goalId: goal.id,
-      created: goal,
+      goal,
       plan,
       onTime: plan.onTime,
       warnings: plan.notes,
-      note: 'The card is now live in the side panel and the monthly amount is reserved from the budget.',
+      wouldReserveMonthly: goal.monthlyContribution,
+      freeAfterIfAccepted: round(Math.max(0, ctx.capacity.disposable - goal.monthlyContribution)),
+      note: 'NOTHING HAS BEEN CREATED. A confirmation card is now showing in the chat. Do not say the card exists or that money is reserved — describe the plan and ask whether they want you to set it up.',
+    };
+  },
+
+  propose_cart_cleanup(args, ctx) {
+    if (!ctx.items.length) return { ok: false, error: 'There is nothing in the cart to remove.' };
+
+    const chosen = [];
+    const rejected = [];
+    const seen = new Set();
+
+    for (const raw of Array.isArray(args.items) ? args.items.slice(0, MAX_SUGGESTIONS) : []) {
+      const needle = clampText(raw?.item, 240);
+      if (!needle) continue;
+      const key = needle.toLowerCase();
+      const match =
+        ctx.items.find((item) => String(item.fingerprint).toLowerCase() === key) ||
+        ctx.items.find((item) => String(item.title).toLowerCase() === key) ||
+        ctx.items.find((item) => String(item.title).toLowerCase().includes(key));
+
+      if (!match || seen.has(match.fingerprint)) {
+        if (!match) rejected.push(needle);
+        continue;
+      }
+      seen.add(match.fingerprint);
+
+      chosen.push({
+        fingerprint: match.fingerprint,
+        title: match.title,
+        price: match.price == null ? null : round(Number(match.price) * Number(match.quantity || 1)),
+        currency: match.currency || ctx.currency,
+        status: match.status || 'considering',
+        reason: clampText(raw.reason, 180),
+        recommended: raw.recommended !== false,
+      });
+    }
+
+    if (!chosen.length) {
+      return {
+        ok: false,
+        error: 'None of those match anything in the cart, so no card was shown.',
+        rejected,
+        cartTitles: ctx.items.map((item) => item.title).slice(0, 20),
+      };
+    }
+
+    const recommendedTotal = round(
+      chosen.filter((item) => item.recommended).reduce((sum, item) => sum + Number(item.price || 0), 0),
+    );
+
+    ctx.actions.push({
+      type: 'propose_removal',
+      proposal: {
+        id: newProposalId(),
+        type: 'remove_items',
+        status: 'pending',
+        headline: clampText(args.headline, 120) || 'Remove these from your cart?',
+        confirmLabel: 'Remove selected',
+        declineLabel: 'Keep everything',
+        currency: ctx.currency,
+        items: chosen,
+        createdAt: Date.now(),
+      },
+    });
+
+    return {
+      ok: true,
+      proposed: true,
+      offered: chosen.length,
+      recommendedTotal,
+      rejected: rejected.length ? rejected : undefined,
+      rejectedReason: rejected.length ? 'Not in the cart, so it was left off the card.' : undefined,
+      note: 'NOTHING HAS BEEN REMOVED. The user now sees a tick-list and decides. Say what you are offering and what it would free, then let them choose.',
     };
   },
 
   update_savings_goal(args, ctx) {
     const goal = findGoal(ctx.goals, args.goal);
-    if (!goal) return { ok: false, error: 'No savings goals exist yet. Use create_savings_goal.' };
+    if (!goal) return { ok: false, error: 'No savings goals exist yet. Use propose_savings_goal first.' };
 
     const patch = { updatedAt: Date.now() };
     if (args.targetAmount !== undefined) patch.targetAmount = clampNumber(args.targetAmount);
@@ -455,8 +582,11 @@ const HANDLERS = {
   },
 
   suggest_savings_opportunities(args, ctx) {
-    const goal = findGoal(ctx.goals, args.goal);
-    if (!goal) return { ok: false, error: 'Create a savings goal before attaching suggestions to it.' };
+    // A goal the user has not confirmed yet is a valid target: the suggestions
+    // ride along inside the proposal and land with it if they accept.
+    const goal = findGoal([...ctx.pendingGoals, ...ctx.goals], args.goal);
+    if (!goal) return { ok: false, error: 'Propose or create a savings goal before attaching suggestions to it.' };
+    const isPending = ctx.pendingGoals.some((entry) => entry.id === goal.id);
 
     const allowed = new Map(ctx.candidates.map((candidate) => [candidate.label.toLowerCase(), candidate]));
     const suggestions = [];
@@ -487,12 +617,15 @@ const HANDLERS = {
       });
     }
 
+    // The pending goal object is the same one held inside the proposal action,
+    // so assigning here updates the card the user is about to confirm.
     goal.opportunities = suggestions;
-    ctx.actions.push({ type: 'set_opportunities', id: goal.id, opportunities: suggestions });
+    if (!isPending) ctx.actions.push({ type: 'set_opportunities', id: goal.id, opportunities: suggestions });
 
     return {
       ok: true,
       goalId: goal.id,
+      attachedToUnconfirmedGoal: isPending,
       attached: suggestions.length,
       totals: summarizeOpportunities(suggestions),
       rejected: rejected.length ? rejected : undefined,

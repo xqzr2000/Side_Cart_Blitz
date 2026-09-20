@@ -170,3 +170,28 @@ dialog form { padding: 16px; }
 .receipt { align-self: center; max-width: 94%; text-align: center; background: var(--reserve-soft); color: var(--reserve); border-radius: 12px; padding: 7px 11px; font-size: 10px; font-weight: 750; line-height: 1.45; }
 .message.from-bestie { border-left: 3px solid var(--reserve); }
 .message.from-mom { border-left: 3px solid var(--accent); }
+
+/* --- agent proposals: offers the user confirms before anything changes ---- */
+.proposal { align-self: stretch; border: 1px solid var(--reserve); border-radius: 16px; padding: 12px; background: var(--panel); box-shadow: var(--shadow); }
+.proposal.accepted, .proposal.declined { border-color: var(--line); opacity: .72; }
+.proposal-head { margin: 0 0 9px; font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
+.proposal-body { display: grid; gap: 7px; }
+.proposal-item { display: grid; grid-template-columns: 18px 1fr; gap: 9px; align-items: start; border: 1px solid var(--line); border-radius: 12px; padding: 8px 9px; cursor: pointer; }
+.proposal-item:hover { border-color: var(--reserve); }
+.proposal-item.gone { opacity: .5; cursor: default; }
+.proposal-item input { margin: 2px 0 0; accent-color: var(--reserve); width: 15px; height: 15px; }
+.proposal-item-title { margin: 0; font-size: 11px; font-weight: 750; line-height: 1.35; }
+.proposal-item-reason { margin: 3px 0 0; font-size: 9.5px; color: var(--muted); line-height: 1.4; }
+.goal-preview { border: 1px solid var(--line); border-radius: 13px; padding: 10px; background: var(--reserve-soft); }
+.goal-preview-name { margin: 0; font-size: 12.5px; font-weight: 800; }
+.goal-preview-figures { margin: 4px 0 0; font-size: 11px; font-weight: 750; color: var(--reserve); }
+.goal-preview-why { margin: 6px 0 0; font-size: 10px; line-height: 1.5; color: var(--muted); }
+.proposal-total { margin: 9px 0 0; font-size: 10px; font-weight: 750; color: var(--muted); }
+.proposal-done { margin: 9px 0 0; font-size: 10.5px; font-weight: 800; color: var(--good); }
+.proposal.declined .proposal-done { color: var(--muted); }
+.proposal-actions { display: flex; gap: 8px; margin-top: 11px; }
+.proposal-confirm, .proposal-decline { flex: 1; border: 0; border-radius: 11px; padding: 9px 10px; font-size: 11px; font-weight: 800; }
+.proposal-confirm { background: var(--reserve); color: #fff; }
+.proposal-confirm:disabled { background: var(--soft); color: var(--muted); }
+.proposal-decline { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.proposal-decline:hover { color: var(--ink); border-color: var(--muted); }

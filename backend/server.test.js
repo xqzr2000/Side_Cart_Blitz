@@ -71,7 +71,7 @@ const COACHELLA_SCRIPT = [
       role: 'assistant',
       content: '',
       tool_calls: [
-        toolCall('t3', 'create_savings_goal', {
+        toolCall('t3', 'propose_savings_goal', {
           name: 'Coachella Fund',
           emoji: '🎪',
           targetAmount: 2124,
@@ -110,16 +110,21 @@ test('the room runs Bestie tools end to end and returns applyable actions', asyn
   assert.equal(result.replies[1].agent, 'Mom');
   assert.deepEqual(result.warnings, []);
 
-  const created = result.actions.find((action) => action.type === 'create_goal');
-  assert.ok(created, 'the agent actually created a goal');
-  assert.equal(created.goal.name, 'Coachella Fund');
-  assert.equal(created.goal.monthlyContribution, 150);
-  assert.equal(created.goal.currency, 'CAD');
-  assert.ok(created.goal.breakdown.length >= 5, 'the researched breakdown rides onto the card');
+  const offer = result.actions.find((action) => action.type === 'propose_goal');
+  assert.ok(offer, 'the agent put a confirmation card up');
+  assert.equal(offer.proposal.status, 'pending');
+  assert.equal(offer.proposal.goal.name, 'Coachella Fund');
+  assert.equal(offer.proposal.goal.monthlyContribution, 150);
+  assert.equal(offer.proposal.goal.currency, 'CAD');
+  assert.ok(offer.proposal.goal.breakdown.length >= 5, 'the researched breakdown rides onto the card');
 
-  const suggestions = result.actions.find((action) => action.type === 'set_opportunities');
-  assert.equal(suggestions.opportunities.length, 1, 'the invented expense was dropped');
-  assert.equal(suggestions.opportunities[0].fingerprint, 'c1');
+  // Nothing is committed server-side; the panel applies it only on confirm.
+  assert.ok(!result.actions.some((action) => action.type === 'create_goal'), 'no goal was created outright');
+
+  // Suggestions ride inside the unconfirmed card rather than as a separate write.
+  assert.ok(!result.actions.some((action) => action.type === 'set_opportunities'));
+  assert.equal(offer.proposal.goal.opportunities.length, 1, 'the invented expense was dropped');
+  assert.equal(offer.proposal.goal.opportunities[0].fingerprint, 'c1');
 
   // Only Bestie is handed tools; Mom answers with Bestie's turn already in view.
   const bestieCalls = calls.filter((call) => call.tools);
@@ -127,7 +132,11 @@ test('the room runs Bestie tools end to end and returns applyable actions', asyn
   const momCall = calls.at(-1);
   assert.equal(momCall.tools, undefined);
   assert.ok(momCall.messages.some((m) => /\[Bestie, in the room\]/.test(m.content || '')));
-  assert.ok(momCall.messages.some((m) => /created the savings card "Coachella Fund"/.test(m.content || '')));
+  assert.ok(momCall.messages.some((m) => /offered a savings card "Coachella Fund"/.test(m.content || '')));
+  assert.ok(
+    momCall.messages.some((m) => /NOT accepted yet/.test(m.content || '')),
+    'Mom is told the card is still only an offer',
+  );
 });
 
 test('one agent failing does not take the room down', async () => {
@@ -184,14 +193,14 @@ test('the SSE endpoint streams tool progress, messages and actions in order', as
   assert.equal(names.at(-1), 'done');
 
   const tools = events.filter((event) => event.name === 'tool').map((event) => event.data.tool);
-  assert.deepEqual(tools, ['estimate_goal_costs', 'draft_savings_plan', 'create_savings_goal', 'suggest_savings_opportunities']);
+  assert.deepEqual(tools, ['estimate_goal_costs', 'draft_savings_plan', 'propose_savings_goal', 'suggest_savings_opportunities']);
   assert.ok(events.filter((event) => event.name === 'tool_result').every((event) => event.data.ok));
 
   // Progress must reach the panel before the reply it explains.
   assert.ok(names.indexOf('tool') < names.indexOf('message'));
 
   const actions = events.find((event) => event.name === 'actions');
-  assert.ok(actions.data.actions.some((action) => action.type === 'create_goal'));
+  assert.ok(actions.data.actions.some((action) => action.type === 'propose_goal'));
 
   const messages = events.filter((event) => event.name === 'message');
   assert.deepEqual(messages.map((event) => event.data.agent), ['Bestie', 'Mom']);
@@ -204,5 +213,6 @@ test('health reports the tool surface so the options page can verify it', async 
 
   assert.equal(data.ok, true);
   assert.equal(data.streaming, true);
-  assert.ok(data.tools.includes('create_savings_goal'));
+  assert.ok(data.tools.includes('propose_savings_goal'));
+  assert.ok(data.tools.includes('propose_cart_cleanup'));
 });

@@ -84,6 +84,10 @@ Mom and Bestie are WiseShelf's AI agents, always ready to talk.
 
 4, Recommend what to keep, swap, or remove
 
+5, Offer to do it: a tick-list of the items worth dropping, with the
+   borderline ones left unticked. You choose, you confirm, and only then
+   do they leave your cart.
+
 ```
 
 Result: A smarter cart that fits your budget. 
@@ -105,9 +109,11 @@ This one is built, not mocked. Bestie has tools, and you watch her use them:
    Your budget, your entered bills, what you have already spent this month,
    and anything already reserved by other goals.
 
-3. Creating your savings card
-   A "Coachella Fund" card appears in the side panel while you are reading
-   her message, and the monthly amount is reserved out of "Still free".
+3. Drafting your savings card
+   She does not create anything behind your back. A "Coachella Fund" card
+   appears in the chat with the plan on it and a Create it / Not now
+   choice. Tap Create it and the card lands in the panel with the monthly
+   amount reserved out of "Still free"; tap Not now and nothing changes.
 
 4. Finding ways to get there sooner
    Only from spending that is really in your cart or bills. Tap Apply and
@@ -144,6 +150,11 @@ happy to invent prices. So they do not do either.
 - **Suggestions are filtered against reality.** `suggest_savings_opportunities`
   drops anything that is not actually in your cart or bills, so Bestie cannot
   invent a latte habit for you to give up.
+- **The agents propose; you decide.** Nothing that creates a savings card or
+  removes something from your cart happens without a tap. `propose_savings_goal`
+  and `propose_cart_cleanup` put a confirmation card in the chat and return
+  nothing but an offer — the side panel writes the change only when you accept,
+  and a removal card lets you pick which items actually go.
 - **Capacity deliberately leaves slack.** A plan that claims every free dollar
   gets abandoned in week two, so only about half of what is free is offered.
 - **The room is a conversation.** Bestie answers first because she is the one who
