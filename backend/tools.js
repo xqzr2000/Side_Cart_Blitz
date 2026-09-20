@@ -279,7 +279,7 @@ const HANDLERS = {
 
     const total = round(breakdown.reduce((sum, item) => sum + item.amount, 0));
     const reference = referenceEstimate(goal, ctx.currency);
-    ctx.scratch.estimate = { goal, breakdown, total, currency: ctx.currency };
+    ctx.scratch.estimate = { goal, breakdown, total, currency: ctx.currency, disclaimer };
 
     return {
       ok: true,
@@ -341,9 +341,13 @@ const HANDLERS = {
       return { ok: false, error: `A goal named "${name}" already exists. Use update_savings_goal instead.`, goalId: existing.id };
     }
 
-    const breakdown = normalizeBreakdown(args.breakdown).length
-      ? normalizeBreakdown(args.breakdown)
-      : ctx.scratch.estimate?.breakdown || [];
+    // Only inherit the reference disclaimer when the breakdown itself came from
+    // the reference library; the agent's own researched figures are not dated
+    // by it.
+    const agentBreakdown = normalizeBreakdown(args.breakdown);
+    const usingReference = !agentBreakdown.length && Boolean(ctx.scratch.estimate?.breakdown?.length);
+    const breakdown = agentBreakdown.length ? agentBreakdown : ctx.scratch.estimate?.breakdown || [];
+    const estimateNote = usingReference ? clampText(ctx.scratch.estimate.disclaimer, 200) : '';
 
     const plan = buildPlan({
       targetAmount,
@@ -367,6 +371,7 @@ const HANDLERS = {
       status: 'active',
       rationale: clampText(args.rationale, 240),
       breakdown,
+      estimateNote,
       opportunities: [],
       contributions: [],
       createdBy: 'Bestie',

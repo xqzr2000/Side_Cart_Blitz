@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildToolContext, executeTool } = require('./tools');
+const { REFERENCE_AS_OF_LABEL } = require('./cost-library');
 
 const NOW = new Date('2026-09-18T12:00:00Z');
 
@@ -37,7 +38,9 @@ test('cost estimation falls back to the grounded reference library and totals se
   assert.equal(result.currency, 'CAD');
   assert.equal(result.source, 'reference-library');
   assert.ok(result.lineItems.length >= 5);
-  assert.match(result.disclaimer, /not a live price quote/);
+  assert.ok(result.disclaimer.includes(REFERENCE_AS_OF_LABEL), 'the estimate says how old its figures are');
+  assert.match(result.disclaimer, /not a live quote/);
+  assert.match(result.disclaimer, /static reference rate/, 'a converted estimate says the rate is static');
   assert.equal(result.total, result.lineItems.reduce((sum, item) => sum + item.amount, 0));
   assert.ok(result.total > 1500 && result.total < 3500, `unexpected CAD total: ${result.total}`);
 });
@@ -173,4 +176,43 @@ test('malformed tool arguments fail closed', () => {
   assert.equal(executeTool('create_savings_goal', '{not json', ctx).ok, false);
   assert.equal(executeTool('no_such_tool', {}, ctx).ok, false);
   assert.equal(executeTool('create_savings_goal', { name: 'X', targetAmount: 0 }, ctx).ok, false);
+});
+
+test('a library-sourced goal carries the dated disclaimer onto the card', () => {
+  const ctx = buildToolContext(demoState(), NOW);
+  executeTool('estimate_goal_costs', { goal: 'Coachella 2027' }, ctx);
+  const created = executeTool('create_savings_goal', {
+    name: 'Coachella Fund',
+    targetAmount: 2124,
+    monthlyContribution: 150,
+  }, ctx).created;
+
+  assert.ok(created.estimateNote.includes(REFERENCE_AS_OF_LABEL));
+  assert.equal(created.estimateNote, ctx.scratch.estimate.disclaimer);
+});
+
+test("the agent's own researched figures are not stamped with the library's date", () => {
+  const ctx = buildToolContext(demoState(), NOW);
+  executeTool('estimate_goal_costs', {
+    goal: 'Coachella',
+    lineItems: [{ label: 'Pass', amount: 900 }, { label: 'Flight', amount: 500 }],
+  }, ctx);
+  const created = executeTool('create_savings_goal', {
+    name: 'Coachella Fund',
+    targetAmount: 1400,
+    monthlyContribution: 150,
+    breakdown: [{ label: 'Pass', amount: 900 }, { label: 'Flight', amount: 500 }],
+  }, ctx).created;
+
+  assert.equal(created.estimateNote, '', 'no inherited date when the figures are the agent own');
+});
+
+test('a currency that needs no conversion does not claim a conversion happened', () => {
+  const state = demoState();
+  state.settings.currency = 'USD';
+  const ctx = buildToolContext(state, NOW);
+  const result = executeTool('estimate_goal_costs', { goal: 'Coachella 2027' }, ctx);
+
+  assert.ok(result.disclaimer.includes(REFERENCE_AS_OF_LABEL));
+  assert.doesNotMatch(result.disclaimer, /reference rate/);
 });

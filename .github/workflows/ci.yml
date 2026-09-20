@@ -15,15 +15,21 @@ permissions:
 
 jobs:
   test:
-    name: check + test
+    name: check + test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      # Report both versions rather than hiding one behind the other's failure.
+      fail-fast: false
+      matrix:
+        node-version: ['22', '24']
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          # Matches the floor in package.json engines.
-          node-version: '22'
+          # '22' matches the floor in package.json engines; '24' guards forward
+          # compatibility. Both verified locally before this matrix was added.
+          node-version: ${{ matrix.node-version }}
 
       # The project has no runtime dependencies today. This stays correct if
       # that changes, and is a no-op until it does.

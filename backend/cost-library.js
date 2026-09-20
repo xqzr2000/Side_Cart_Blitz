@@ -1,5 +1,11 @@
 const { round } = require('./planner');
 
+// The month these rates and the reference prices below were set. It is carried
+// all the way onto the savings card, so a plan built a year from now cannot
+// pass stale figures off as freshly researched ones.
+const REFERENCE_AS_OF = '2026-09';
+const REFERENCE_AS_OF_LABEL = 'September 2026';
+
 // Static, clearly-labelled rates. Good enough to sanity-check a savings goal;
 // never presented to the user as a live quote.
 const FX_TO_USD = {
@@ -10,7 +16,8 @@ const FX_TO_USD = {
   JPY: 0.0064,
 };
 
-const FX_NOTE = 'Converted with a static reference rate, not a live quote.';
+// Always shown alongside the dated disclaimer, so it does not repeat the date.
+const FX_NOTE = 'Cross-currency amounts use a static reference rate.';
 
 function convert(amount, from = 'USD', to = 'USD') {
   const source = FX_TO_USD[String(from).toUpperCase()];
@@ -146,7 +153,8 @@ function referenceEstimate(text, currency = 'USD') {
     nextDates: reference.nextDates || [],
     sourceCurrency: reference.currency,
     fxNote: reference.currency === currency ? '' : FX_NOTE,
-    disclaimer: 'Reference estimate for a lean/student trip, not a live price quote.',
+    asOf: REFERENCE_AS_OF,
+    disclaimer: `Reference estimate for a lean/student trip, priced ${REFERENCE_AS_OF_LABEL} — not a live quote.`,
   };
 }
 
@@ -158,4 +166,13 @@ function referenceContext(text, currency = 'USD') {
   return `REFERENCE COST ESTIMATE — ${estimate.label}\n${lines.join('\n')}\nReference total: ${estimate.total} ${currency}${dates}\n${estimate.disclaimer}${estimate.fxNote ? ` ${estimate.fxNote}` : ''}`;
 }
 
-module.exports = { FX_NOTE, GOAL_REFERENCES, convert, lookupGoalReference, referenceContext, referenceEstimate };
+module.exports = {
+  FX_NOTE,
+  GOAL_REFERENCES,
+  REFERENCE_AS_OF,
+  REFERENCE_AS_OF_LABEL,
+  convert,
+  lookupGoalReference,
+  referenceContext,
+  referenceEstimate,
+};

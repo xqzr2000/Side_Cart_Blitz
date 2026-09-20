@@ -303,7 +303,7 @@ function buildBreakdown(goal, currency) {
 
   const note = document.createElement('p');
   note.className = 'small-note';
-  note.textContent = 'Estimates, not live quotes.';
+  note.textContent = goal.estimateNote || 'Estimates, not live quotes.';
   details.append(note);
   return details;
 }
