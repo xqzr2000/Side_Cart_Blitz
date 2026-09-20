@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push supersedes the run already in flight for the same branch.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: check + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the floor in package.json engines.
+          node-version: '22'
+
+      # The project has no runtime dependencies today. This stays correct if
+      # that changes, and is a no-op until it does.
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Syntax check every backend and extension script
+        run: npm run check
+
+      - name: Run tests
+        run: npm test

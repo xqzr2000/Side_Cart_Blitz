@@ -1,6 +1,6 @@
 {
   "name": "cartside-blitz",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Gentle shopping-budget Chrome side panel where Mom + Bestie research goals, build savings plans, and reserve money from your budget.",
   "scripts": {
