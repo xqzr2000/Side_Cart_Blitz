@@ -64,7 +64,7 @@ Product Market Fit, we are focusing on a specific market:
 Mom and Bestie are WiseShelf's AI agents, always ready to talk.
 
 - Mom teaches budgeting basics and helps you build smart spending habits.
-- Bestie looks out for your wallet by spotting upcoming expenses, finding better deals, and suggesting smarter alternatives.
+- Bestie looks out for your wallet by spotting upcoming expenses, finding better deals, and turning the things you want into savings plans she can actually set up for you.
 - Together, they help you shop smarter, spend wisely, and stay on budget.
 
 ---
@@ -84,6 +84,10 @@ Mom and Bestie are WiseShelf's AI agents, always ready to talk.
 
 4, Recommend what to keep, swap, or remove
 
+5, Offer to do it: a tick-list of the items worth dropping, with the
+   borderline ones left unticked. You choose, you confirm, and only then
+   do they leave your cart.
+
 ```
 
 Result: A smarter cart that fits your budget. 
@@ -92,21 +96,74 @@ Result: A smarter cart that fits your budget.
 
 ## Demo-2: Save for a Goal
 
-- Open the chat and tell Bestie: "I want to go to Coachella. Can you help me save for it?"
+Open the chat and tell Bestie: **"I want to go to Coachella. Can you help me save for it?"**
+
+This one is built, not mocked. Bestie has tools, and you watch her use them:
+
 ```text
-1. Bestie researches Coachella ticket prices and estimates related costs such as flights, accommodation, food, and local transportation.
+1. Researching what this actually costs
+   Bestie breaks the goal into line items — pass, flight, lodging, food,
+   local transport, essentials — and the backend totals them.
 
-2. Bestie reviews your current budget and spending habits.
+2. Running the numbers against your budget
+   Your budget, your entered bills, what you have already spent this month,
+   and anything already reserved by other goals.
 
-3. Bestie creates a personalized savings plan: "To reach your goal, set aside CA$150 per month."
+3. Drafting your savings card
+   She does not create anything behind your back. A "Coachella Fund" card
+   appears in the chat with the plan on it and a Create it / Not now
+   choice. Tap Create it and the card lands in the panel with the monthly
+   amount reserved out of "Still free"; tap Not now and nothing changes.
 
-4. Bestie automatically adds a new card: "Coachella Fund", and reserves CA$150 from your monthly budget while tracking your progress.
-
-5. Along the way, Bestie helps you stay on track by identifying expenses you can reduce and finding opportunities to save more.
-
+4. Finding ways to get there sooner
+   Only from spending that is really in your cart or bills. Tap Apply and
+   the item leaves the cart and the money lands in the fund.
 ```
 
-Result: Turn a wish into a plan, and a plan into reality.
+**Bestie tells you the truth about the timeline.** With CA$900 a month, four bills
+and a month that is already mostly spent, Coachella in April 2027 needs CA$355 a
+month. You have about CA$150 that is genuinely free. So she reserves CA$150,
+says out loud that this lands you in December 2027, and offers the trade: trim
+these expenses, or aim at the next edition.
+
+Result: Turn a wish into a plan, and a plan into reality — with a plan that admits
+what it costs.
+
+### Try it
+
+1. `npm start` with an `OPENROUTER_API_KEY` in `.env`.
+2. Extension **Options → Load demo data** seeds a first-year CAD budget.
+3. Open the side panel, hit **Let's Talk**, and tap the Coachella quick-start chip.
+
+### How it works
+
+The interesting problem here is that language models are bad at arithmetic and
+happy to invent prices. So they do not do either.
+
+- **Every number is computed, not generated.** `backend/planner.js` owns the
+  savings math — monthly capacity, contribution, timeline, feasibility. Bestie
+  calls `draft_savings_plan` and quotes what comes back. The system prompt tells
+  her that any amount she says out loud has to come from a tool.
+- **Cost estimates are grounded.** `backend/cost-library.js` holds reference
+  breakdowns and a static FX table, labelled as estimates rather than quotes.
+  Set `OPENROUTER_WEB_SEARCH=true` to let her check live prices instead.
+- **Suggestions are filtered against reality.** `suggest_savings_opportunities`
+  drops anything that is not actually in your cart or bills, so Bestie cannot
+  invent a latte habit for you to give up.
+- **The agents propose; you decide.** Nothing that creates a savings card or
+  removes something from your cart happens without a tap. `propose_savings_goal`
+  and `propose_cart_cleanup` put a confirmation card in the chat and return
+  nothing but an offer — the side panel writes the change only when you accept,
+  and a removal card lets you pick which items actually go.
+- **Capacity deliberately leaves slack.** A plan that claims every free dollar
+  gets abandoned in week two, so only about half of what is free is offered.
+- **The room is a conversation.** Bestie answers first because she is the one who
+  can change the app; Mom then replies with Bestie's message and the real changes
+  in front of her. Progress streams over SSE, so you see the tools running
+  instead of a frozen spinner.
+
+Tools live in `backend/tools.js`; `npm test` covers the math, the tool
+guardrails, and the full room end to end against a stubbed model.
 
 ---
 

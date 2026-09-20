@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push supersedes the run already in flight for the same branch.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: check + test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Report both versions rather than hiding one behind the other's failure.
+      fail-fast: false
+      matrix:
+        node-version: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # '22' matches the floor in package.json engines; '24' guards forward
+          # compatibility. Both verified locally before this matrix was added.
+          node-version: ${{ matrix.node-version }}
+
+      # The project has no runtime dependencies today. This stays correct if
+      # that changes, and is a no-op until it does.
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Syntax check every backend and extension script
+        run: npm run check
+
+      - name: Run tests
+        run: npm test

@@ -1,5 +1,6 @@
 const DEFAULT_STATE = {
   items: [],
+  goals: [],
   settings: {
     budget: 500,
     currency: 'USD',
