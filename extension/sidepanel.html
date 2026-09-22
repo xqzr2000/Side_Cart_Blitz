@@ -3,119 +3,94 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CartSide</title>
+  <meta name="color-scheme" content="light" />
+  <title>WiseShelf</title>
   <link rel="stylesheet" href="sidepanel.css" />
 </head>
 <body>
   <main class="app-shell">
     <section class="main-view" id="mainView">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">shopping companion</p>
-          <h1>CartSide</h1>
+      <header class="brand-bar">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">W</span>
+          <div><p class="brand-name">WISESHELF</p><p class="brand-subtitle">BUDGET COMPANION</p></div>
         </div>
-        <button class="icon-button" id="openSettings" aria-label="Open extension settings" title="Settings">⚙</button>
+        <button class="icon-button inverse" id="openSettings" aria-label="Open connection settings" title="Settings">•••</button>
       </header>
 
-      <section class="budget-card" aria-label="Budget summary">
-        <div class="budget-head">
-          <div>
-            <span class="label">Monthly budget</span>
-            <strong id="budgetValue">$0</strong>
-          </div>
-          <button class="text-button" id="editBudget">Edit</button>
+      <section class="budget-ledger" aria-label="Monthly budget overview">
+        <div class="ledger-primary">
+          <div><p class="kicker">MONTHLY PLAN</p><strong id="budgetValue">$0</strong></div>
+          <button class="text-button" id="editBudget">EDIT</button>
         </div>
-        <div class="progress" aria-hidden="true"><span id="budgetProgress"></span></div>
-        <div class="metrics">
-          <div><span>Bought</span><strong id="spentValue">$0</strong></div>
-          <div><span>Still free</span><strong id="remainingValue">$0</strong></div>
-          <div><span>Considering</span><strong id="consideringValue">$0</strong></div>
+        <div class="progress-track" aria-label="Budget utilization"><span id="budgetProgress"></span></div>
+        <div class="metric-grid">
+          <div class="metric"><span>AVAILABLE</span><strong id="remainingValue">$0</strong></div>
+          <div class="metric"><span>AFTER BILLS</span><strong id="freeValue">$0</strong></div>
+          <div class="metric"><span>SPENT</span><strong id="spentValue">$0</strong></div>
+          <div class="metric"><span>PENDING</span><strong id="pendingValue">$0</strong></div>
         </div>
-        <p class="small-note" id="currencyNote"></p>
+        <p class="microcopy" id="currencyNote"></p>
       </section>
 
-      <section class="nudge hidden" id="purchaseNudge">
-        <span id="purchaseNudgeText"></span>
-        <button id="dismissNudge" class="text-button">Got it</button>
+      <section class="notice hidden" id="purchaseNudge">
+        <span class="notice-rule" aria-hidden="true"></span>
+        <p id="purchaseNudgeText"></p>
+        <button id="dismissNudge" class="text-button">DISMISS</button>
       </section>
 
-      <section class="section-block">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">not charged yet</p>
-            <h2>Considering</h2>
-          </div>
-          <span class="pill" id="consideringCount">0</span>
-        </div>
-        <div class="cards" id="consideringCards"></div>
+      <section class="collection" id="pendingSection">
+        <div class="section-heading"><div><p class="kicker">REQUIRES CONFIRMATION</p><h2>Pending checkout</h2></div><span class="count" id="pendingCount">0</span></div>
+        <div class="item-list" id="pendingCards"></div>
       </section>
 
-      <section class="section-block bought-block">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">counted in spending</p>
-            <h2>Bought</h2>
-          </div>
-          <span class="pill" id="boughtCount">0</span>
-        </div>
-        <div class="cards" id="boughtCards"></div>
+      <section class="collection">
+        <div class="section-heading"><div><p class="kicker">NOT CHARGED</p><h2>Considering</h2></div><span class="count" id="consideringCount">0</span></div>
+        <div class="item-list" id="consideringCards"></div>
+      </section>
+
+      <section class="collection bought-block">
+        <div class="section-heading"><div><p class="kicker">CONFIRMED SPEND</p><h2>Bought</h2></div><span class="count" id="boughtCount">0</span></div>
+        <div class="item-list" id="boughtCards"></div>
       </section>
 
       <div class="bottom-space"></div>
       <footer class="talk-dock">
         <button id="letsTalk" class="talk-button">
-          <span>Let’s Talk</span>
-          <small>Mom + Bestie can look at this budget</small>
+          <span class="talk-label">TALK TO WISESHELF</span>
+          <span class="talk-copy">Review the budget with Mom + Bestie</span>
+          <span class="talk-arrow" aria-hidden="true">↗</span>
         </button>
       </footer>
     </section>
 
     <section class="chat-view" id="chatView" aria-hidden="true">
-      <header class="chat-topbar">
-        <button id="closeChat" class="icon-button" aria-label="Back to shopping">←</button>
-        <div>
-          <p class="eyebrow">two-agent room</p>
-          <h2>Mom + Bestie</h2>
-        </div>
-        <span class="online-dot" title="Uses your configured backend"></span>
+      <header class="chat-header">
+        <button id="closeChat" class="icon-button" aria-label="Back to overview">←</button>
+        <div><p class="kicker">PRIVATE BUDGET ROOM</p><h2>Mom + Bestie</h2></div>
+        <span class="provider-state" id="providerState">LIVE</span>
       </header>
-
-      <section class="agent-intro">
-        <div><span class="avatar mom">M</span><p><strong>Mom</strong><br><small>guards the wallet</small></p></div>
-        <div><span class="avatar bestie">B</span><p><strong>Bestie</strong><br><small>keeps bills in view</small></p></div>
-      </section>
-
-      <div class="chat-log" id="chatLog"></div>
-
+      <div class="agent-strip"><span>MOM · WALLET</span><span>BESTIE · BILLS</span></div>
+      <div class="chat-log" id="chatLog" aria-live="polite"></div>
       <form class="composer" id="chatForm">
-        <textarea id="chatInput" rows="2" maxlength="1800" placeholder="Should I buy this? What am I forgetting?"></textarea>
-        <button id="sendChat" type="submit">Send</button>
+        <textarea id="chatInput" rows="2" maxlength="1800" placeholder="Ask about this purchase or your monthly plan"></textarea>
+        <button id="sendChat" type="submit">SEND</button>
       </form>
-      <p class="privacy-note">Only your budget snapshot and recent chat are sent to your configured Node backend.</p>
+      <p class="privacy-note">Only the budget snapshot and recent chat are sent to your configured backend.</p>
     </section>
   </main>
 
   <dialog id="budgetDialog">
     <form method="dialog" id="budgetForm">
-      <div class="dialog-head">
-        <div><p class="eyebrow">budget setup</p><h2>Keep it realistic</h2></div>
-        <button class="icon-button" value="cancel" aria-label="Close">×</button>
+      <div class="dialog-head"><div><p class="kicker">MONTHLY PLAN</p><h2>Budget & bills</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+      <div class="dialog-grid">
+        <label class="field">Budget<input id="budgetInput" type="number" min="0" step="0.01" inputmode="decimal" /></label>
+        <label class="field">Currency<select id="currencyInput"><option>USD</option><option>CAD</option><option>EUR</option><option>GBP</option><option>JPY</option><option>INR</option><option>AUD</option><option>AED</option></select></label>
       </div>
-
-      <label class="field">Budget
-        <input id="budgetInput" type="number" min="0" step="0.01" inputmode="decimal" />
-      </label>
-      <label class="field">Currency
-        <select id="currencyInput">
-          <option>USD</option><option>CAD</option><option>EUR</option><option>GBP</option><option>JPY</option>
-        </select>
-      </label>
-
-      <div class="bills-head"><h3>Upcoming bills</h3><button type="button" class="text-button" id="addBill">+ Add bill</button></div>
+      <div class="bills-head"><h3>Upcoming bills</h3><button type="button" class="text-button" id="addBill">+ ADD BILL</button></div>
       <div id="billRows" class="bill-rows"></div>
-      <p class="small-note">Bestie only mentions bills you enter here.</p>
-
-      <button class="primary-button" id="saveBudget" value="default">Save budget</button>
+      <p class="microcopy">WiseShelf only uses obligations you enter here.</p>
+      <button class="primary-button" id="saveBudget" value="default">SAVE PLAN</button>
     </form>
   </dialog>
 

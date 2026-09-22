@@ -3,31 +3,32 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CartSide Settings</title>
+  <title>WiseShelf Settings</title>
   <link rel="stylesheet" href="options.css" />
 </head>
 <body>
-  <main>
-    <p class="eyebrow">CartSide</p>
-    <h1>Connection settings</h1>
-    <p>Keep the OpenRouter API key on the Node backend. This extension only stores the backend address and, optionally, a shared secret.</p>
+  <main class="settings-shell">
+    <header>
+      <p class="eyebrow">WISESHELF / SYSTEM</p>
+      <h1>Connection settings</h1>
+      <p class="lede">Provider keys stay on the Node backend. The browser extension stores only the backend address and an optional shared secret.</p>
+    </header>
 
     <form id="optionsForm">
-      <label>Backend URL
+      <section class="setting-row">
+        <div><label for="backendUrl">Backend URL</label><p>Use localhost in development or an HTTPS endpoint in production.</p></div>
         <input id="backendUrl" type="url" placeholder="http://localhost:8787" required />
-      </label>
-      <small>Local Dev Container: <code>http://localhost:8787</code>. Codespaces: paste the forwarded <code>https://…-8787.app.github.dev</code> URL.</small>
-
-      <label>Shared secret <span>(optional)</span>
-        <input id="sharedSecret" type="password" autocomplete="off" placeholder="Same value as APP_SHARED_SECRET" />
-      </label>
-      <small>Recommended if your Codespaces port or deployed backend is public.</small>
+      </section>
+      <section class="setting-row">
+        <div><label for="sharedSecret">Shared secret</label><p>Required when your production backend is exposed outside localhost.</p></div>
+        <input id="sharedSecret" type="password" autocomplete="off" placeholder="APP_SHARED_SECRET" />
+      </section>
 
       <div class="actions">
-        <button type="submit">Save</button>
-        <button type="button" class="secondary" id="testConnection">Test connection</button>
+        <button type="submit" class="primary">SAVE SETTINGS</button>
+        <button type="button" id="testConnection">TEST CONNECTION</button>
       </div>
-      <p id="status" role="status"></p>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
     </form>
   </main>
   <script src="options.js"></script>

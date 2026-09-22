@@ -14,32 +14,44 @@ async function load() {
 
 async function save(event) {
   event.preventDefault();
-  const { settings = {} } = await chrome.storage.local.get('settings');
-  await chrome.storage.local.set({
-    settings: {
-      ...settings,
-      backendUrl: backendUrl.value.trim().replace(/\/+$/, ''),
-      sharedSecret: sharedSecret.value,
-    },
-  });
-  showStatus('Saved.');
-}
-
-async function testConnection() {
-  showStatus('Testing…');
   try {
-    const url = backendUrl.value.trim().replace(/\/+$/, '');
-    const response = await fetch(`${url}/health`, {
-      headers: sharedSecret.value ? { 'x-cartside-secret': sharedSecret.value } : {},
-    });
-    const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
-    showStatus(`Connected. OpenRouter key: ${data.openRouterConfigured ? 'configured' : 'missing'}. Model: ${data.model}.`);
+    const normalized = normalizeBackendUrl(backendUrl.value);
+    const { settings = {} } = await chrome.storage.local.get('settings');
+    await chrome.storage.local.set({ settings: { ...settings, backendUrl: normalized, sharedSecret: sharedSecret.value } });
+    showStatus('Settings saved. Provider credentials remain on the backend.');
   } catch (error) {
-    showStatus(`Connection failed: ${error.message}`);
+    showStatus(error.message);
   }
 }
 
-function showStatus(text) {
-  status.textContent = text;
+async function testConnection() {
+  showStatus('Testing connection…');
+  try {
+    const url = normalizeBackendUrl(backendUrl.value);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    let response;
+    try {
+      response = await fetch(`${url}/health`, {
+        signal: controller.signal,
+        headers: sharedSecret.value ? { 'x-wiseshelf-secret': sharedSecret.value } : {},
+      });
+    } finally { clearTimeout(timeout); }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    const providers = data.providers || {};
+    showStatus(`Connected to ${data.service || 'WiseShelf backend'} ${data.version || ''}. Chat provider: ${providers.openRouterConfigured ? 'configured' : 'not configured'}. Jev: ${providers.typeSafeConfigured ? 'configured' : 'not configured'}.`);
+  } catch (error) {
+    showStatus(error.name === 'AbortError' ? 'Connection timed out.' : `Connection failed: ${error.message}`);
+  }
 }
+
+function normalizeBackendUrl(value) {
+  const url = new URL(String(value || '').trim());
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (!local && url.protocol !== 'https:') throw new Error('Remote backends must use HTTPS so the shared secret is not sent in plaintext.');
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Backend URL must use HTTP or HTTPS.');
+  return url.toString().replace(/\/+$/, '');
+}
+
+function showStatus(text) { status.textContent = text; }

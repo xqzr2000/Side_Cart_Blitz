@@ -1,13 +1,14 @@
 {
-  "name": "cartside-blitz",
-  "version": "0.1.0",
+  "name": "wiseshelf-side-cart",
+  "version": "1.0.0",
   "private": true,
-  "description": "Gentle shopping-budget Chrome side panel with Mom + Bestie OpenRouter agents.",
+  "description": "Production-grade WiseShelf browser side-panel budgeting companion with optional TypeSafe Jev decision support.",
   "scripts": {
     "dev": "node --watch backend/server.js",
     "start": "node backend/server.js",
-    "check": "node --check backend/server.js && node --check backend/agents.js && node --check extension/service-worker.js && node --check extension/content.js && node --check extension/sidepanel.js && node --check extension/options.js",
-    "test": "node --test backend/*.test.js"
+    "check": "node --check backend/*.js && node --check extension/*.js",
+    "test": "node --test backend/*.test.js",
+    "verify": "npm run check && npm test"
   },
   "engines": {
     "node": ">=22"

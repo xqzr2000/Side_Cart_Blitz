@@ -1,24 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "CartSide Budget Companion",
-  "version": "0.1.0",
-  "description": "A gentle side-panel budget companion for shopping, with Mom + Bestie chat.",
+  "name": "WiseShelf — Budget Companion",
+  "version": "1.0.0",
+  "description": "A budget-first shopping side panel with structured purchase checks and optional AI guidance.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "sidePanel"],
-  "host_permissions": [
-    "http://localhost/*",
-    "http://127.0.0.1/*",
-    "https://*.app.github.dev/*"
-  ],
-  "background": {
-    "service_worker": "service-worker.js"
-  },
-  "action": {
-    "default_title": "Open CartSide"
-  },
-  "side_panel": {
-    "default_path": "sidepanel.html"
-  },
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": { "service_worker": "service-worker.js" },
+  "action": { "default_title": "Open WiseShelf" },
+  "side_panel": { "default_path": "sidepanel.html" },
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],

@@ -43,105 +43,177 @@ function render() {
 }
 
 function renderBudget() {
+  const summary = getSummary();
+  $('budgetValue').textContent = money(summary.budget, summary.currency);
+  $('spentValue').textContent = money(summary.spent, summary.currency);
+  $('pendingValue').textContent = money(summary.pending, summary.currency);
+  $('remainingValue').textContent = money(summary.remaining, summary.currency);
+  $('freeValue').textContent = money(summary.freeAfterBills, summary.currency);
+  const ratio = summary.budget > 0 ? Math.min(1, Math.max(0, summary.spent / summary.budget)) : 0;
+  $('budgetProgress').style.width = `${ratio * 100}%`;
+  $('currencyNote').textContent = summary.omitted
+    ? `${summary.omitted} item${summary.omitted === 1 ? '' : 's'} in another currency are excluded from this ledger.`
+    : '';
+}
+
+function getSummary() {
   const currency = state.settings?.currency || 'USD';
-  const budget = Number(state.settings?.budget || 0);
+  const budget = nonNegative(state.settings?.budget);
   const sameCurrency = state.items.filter((item) => !item.currency || item.currency === currency);
-  const bought = sameCurrency.filter((item) => item.status === 'bought');
-  const considering = sameCurrency.filter((item) => item.status !== 'bought');
-  const spent = sumItems(bought);
-  const consideringTotal = sumItems(considering);
-  const remaining = budget - spent;
-
-  $('budgetValue').textContent = money(budget, currency);
-  $('spentValue').textContent = money(spent, currency);
-  $('remainingValue').textContent = money(remaining, currency);
-  $('consideringValue').textContent = money(consideringTotal, currency);
-  $('budgetProgress').style.width = `${Math.min(100, budget > 0 ? Math.max(0, spent / budget * 100) : 0)}%`;
-
-  const omitted = state.items.filter((item) => item.currency && item.currency !== currency).length;
-  $('currencyNote').textContent = omitted ? `${omitted} item${omitted === 1 ? '' : 's'} in another currency are kept in the list but left out of this total.` : '';
+  const spent = sumItems(sameCurrency.filter((item) => item.status === 'bought'));
+  const pending = sumItems(sameCurrency.filter((item) => item.status === 'pending'));
+  const considering = sumItems(sameCurrency.filter((item) => item.status === 'considering'));
+  const bills = (state.settings?.bills || []).reduce((sum, bill) => sum + nonNegative(bill.amount), 0);
+  return {
+    currency, budget, spent, pending, considering, bills,
+    remaining: budget - spent,
+    freeAfterBills: budget - spent - bills,
+    omitted: state.items.filter((item) => item.currency && item.currency !== currency).length,
+  };
 }
 
 function renderItems() {
-  const considering = state.items.filter((item) => item.status !== 'bought');
+  const pending = state.items.filter((item) => item.status === 'pending');
+  const considering = state.items.filter((item) => item.status === 'considering');
   const bought = state.items.filter((item) => item.status === 'bought');
+  $('pendingCount').textContent = pending.length;
   $('consideringCount').textContent = considering.length;
   $('boughtCount').textContent = bought.length;
-  renderCardList($('consideringCards'), considering, false);
-  renderCardList($('boughtCards'), bought, true);
+  $('pendingSection').classList.toggle('hidden', pending.length === 0);
+  renderItemList($('pendingCards'), pending, 'pending');
+  renderItemList($('consideringCards'), considering, 'considering');
+  renderItemList($('boughtCards'), bought, 'bought');
 }
 
-function renderCardList(container, items, isBought) {
+function renderItemList(container, items, group) {
   container.textContent = '';
   if (!items.length) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = isBought ? 'Nothing marked bought yet.' : 'Add something to a cart and it’ll appear here.';
+    empty.textContent = group === 'bought' ? 'No confirmed purchases yet.' : 'Shopping items detected on supported pages appear here.';
     container.append(empty);
     return;
   }
+  for (const item of items) container.append(createItemRow(item, group));
+}
 
-  for (const item of items) {
-    const card = document.createElement('article');
-    card.className = 'item-card';
+function createItemRow(item, group) {
+  const row = document.createElement('article');
+  row.className = 'item-row';
 
-    const media = item.image ? document.createElement('img') : document.createElement('div');
-    media.className = `item-image${item.image ? '' : ' placeholder'}`;
-    if (item.image) {
-      media.src = item.image;
-      media.alt = '';
-      media.referrerPolicy = 'no-referrer';
-      media.addEventListener('error', () => {
-        const placeholder = document.createElement('div');
-        placeholder.className = 'item-image placeholder';
-        placeholder.textContent = '◌';
-        media.replaceWith(placeholder);
-      });
-    } else {
-      media.textContent = '◌';
-    }
+  const media = item.image ? document.createElement('img') : document.createElement('div');
+  media.className = `item-image${item.image ? '' : ' placeholder'}`;
+  if (item.image) {
+    media.src = item.image;
+    media.alt = '';
+    media.referrerPolicy = 'no-referrer';
+    media.loading = 'lazy';
+    media.addEventListener('error', () => {
+      const replacement = document.createElement('div');
+      replacement.className = 'item-image placeholder';
+      replacement.textContent = 'ITEM';
+      media.replaceWith(replacement);
+    });
+  } else {
+    media.textContent = 'ITEM';
+  }
 
-    const body = document.createElement('div');
-    const title = document.createElement('p');
-    title.className = 'item-title';
-    title.textContent = item.title || 'Shopping item';
-    if (item.intent === 'buying' && !isBought) {
-      const chip = document.createElement('span');
-      chip.className = 'intent-chip';
-      chip.textContent = 'buying now';
-      title.append(chip);
-    }
+  const body = document.createElement('div');
+  body.className = 'item-body';
+  const topline = document.createElement('div');
+  topline.className = 'item-topline';
+  const title = document.createElement('p');
+  title.className = 'item-title';
+  title.textContent = item.title || 'Shopping item';
+  const price = document.createElement('div');
+  price.className = 'item-price';
+  price.textContent = item.price == null ? '—' : money(nonNegative(item.price) * Math.max(1, Number(item.quantity || 1)), item.currency || state.settings.currency);
+  topline.append(title, price);
 
-    const meta = document.createElement('p');
-    meta.className = 'item-meta';
-    meta.textContent = item.site || 'shopping site';
+  const meta = document.createElement('p');
+  meta.className = 'item-meta';
+  meta.textContent = item.site || 'shopping site';
 
-    const price = document.createElement('div');
-    price.className = 'item-price';
-    price.textContent = item.price == null ? 'Price not detected' : money(item.price, item.currency || state.settings.currency);
+  const statusLine = document.createElement('div');
+  statusLine.className = 'status-line';
+  const tag = document.createElement('span');
+  tag.className = `status-tag ${group}`;
+  tag.textContent = group === 'pending' ? 'Checkout pending' : group === 'bought' ? 'Confirmed' : (item.intent === 'buying' ? 'Buying now' : 'Considering');
+  statusLine.append(tag);
 
-    const actions = document.createElement('div');
-    actions.className = 'card-actions';
+  body.append(topline, meta, statusLine);
+  if (item.evaluation) body.append(renderAssessment(item.evaluation));
+  body.append(createActions(item, group));
+  row.append(media, body);
+  return row;
+}
 
-    const toggle = document.createElement('button');
-    toggle.textContent = isBought ? 'Move back' : 'Mark bought';
-    toggle.addEventListener('click', () => updateItem(item.fingerprint, { status: isBought ? 'considering' : 'bought', intent: isBought ? 'considering' : 'bought' }));
+function renderAssessment(evaluation) {
+  const box = document.createElement('div');
+  box.className = 'assessment';
+  if (evaluation.loading) {
+    box.textContent = 'Assessing budget impact…';
+    return box;
+  }
+  if (evaluation.error) {
+    box.textContent = evaluation.error;
+    return box;
+  }
+  const risk = evaluation.deterministic?.level || 'unknown';
+  const decision = evaluation.decision;
+  const fragments = [`Budget impact: ${risk}`];
+  if (decision?.spendType && decision.spendConfidence >= 0.35) fragments.push(`type: ${decision.spendType.replaceAll('_', ' ')}`);
+  if (decision?.duplicateRisk != null && decision.duplicateRisk >= 0.6) fragments.push('possible duplicate');
+  if (decision?.delayScore != null && decision.delayConfidence >= 0.35 && decision.delayScore >= 1.5) fragments.push('pause may help');
+  const strong = document.createElement('strong');
+  strong.textContent = 'ASSESSMENT · ';
+  box.append(strong, document.createTextNode(fragments.join(' · ')));
+  return box;
+}
 
-    const visit = document.createElement('button');
-    visit.className = 'quiet';
-    visit.textContent = 'Open';
-    visit.disabled = !item.url;
-    visit.addEventListener('click', () => item.url && chrome.tabs.create({ url: item.url }));
+function createActions(item, group) {
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
 
-    const remove = document.createElement('button');
-    remove.className = 'quiet';
-    remove.textContent = 'Remove';
-    remove.addEventListener('click', () => removeItem(item.fingerprint));
+  if (group === 'pending') {
+    actions.append(actionButton('CONFIRM BOUGHT', () => updateItem(item.fingerprint, { status: 'bought', intent: 'bought' })));
+    actions.append(actionButton('NOT BOUGHT', () => updateItem(item.fingerprint, { status: 'considering', intent: 'considering' }), 'quiet'));
+  } else if (group === 'bought') {
+    actions.append(actionButton('MOVE BACK', () => updateItem(item.fingerprint, { status: 'considering', intent: 'considering' })));
+  } else {
+    actions.append(actionButton('MARK BOUGHT', () => updateItem(item.fingerprint, { status: 'bought', intent: 'bought' })));
+  }
 
-    actions.append(toggle, visit, remove);
-    body.append(title, meta, price, actions);
-    card.append(media, body);
-    container.append(card);
+  const assess = actionButton(item.evaluation?.loading ? 'ASSESSING…' : 'ASSESS', () => assessItem(item), 'quiet');
+  assess.disabled = Boolean(item.evaluation?.loading);
+  actions.append(assess);
+
+  const open = actionButton('OPEN', () => openItem(item), 'quiet');
+  open.disabled = !item.url;
+  actions.append(open);
+  actions.append(actionButton('REMOVE', () => removeItem(item.fingerprint), 'quiet'));
+  return actions;
+}
+
+function actionButton(label, handler, className = '') {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  if (className) button.className = className;
+  button.addEventListener('click', handler);
+  return button;
+}
+
+async function assessItem(item) {
+  await updateItem(item.fingerprint, { evaluation: { loading: true } });
+  try {
+    const response = await backendFetch('/api/evaluate', {
+      method: 'POST',
+      body: JSON.stringify({ item, state: publicState() }),
+    });
+    await updateItem(item.fingerprint, { evaluation: response.evaluation || { error: 'No assessment returned.' } });
+  } catch (error) {
+    await updateItem(item.fingerprint, { evaluation: { error: readableNetworkError(error) } });
   }
 }
 
@@ -154,7 +226,7 @@ function renderNudge() {
 function openChat() {
   $('chatView').classList.add('open');
   $('chatView').setAttribute('aria-hidden', 'false');
-  setTimeout(() => $('chatInput').focus(), 220);
+  setTimeout(() => $('chatInput').focus(), 120);
   scrollChat();
 }
 
@@ -169,16 +241,18 @@ function renderChat() {
   if (!state.chatMessages.length) {
     const intro = document.createElement('div');
     intro.className = 'message agent';
-    intro.innerHTML = '<span class="speaker">Room</span>Ask about an item, your remaining budget, or the bills you entered. Both agents will answer from different angles.';
+    const speaker = document.createElement('span');
+    speaker.className = 'speaker';
+    speaker.textContent = 'WISESHELF';
+    intro.append(speaker, document.createTextNode('Ask about a purchase, your remaining budget, or the bills you entered.')); 
     log.append(intro);
   }
-
   for (const message of state.chatMessages.slice(-40)) {
     const node = document.createElement('div');
     node.className = `message ${message.role === 'user' ? 'user' : 'agent'}`;
     const speaker = document.createElement('span');
     speaker.className = 'speaker';
-    speaker.textContent = message.role === 'user' ? 'You' : (message.agent || 'Agent');
+    speaker.textContent = message.role === 'user' ? 'YOU' : (message.agent || 'WISESHELF').toUpperCase();
     node.append(speaker, document.createTextNode(message.content));
     log.append(node);
   }
@@ -198,44 +272,79 @@ async function sendChat(event) {
   setSending(true);
 
   try {
-    const backendUrl = String(state.settings.backendUrl || 'http://localhost:8787').replace(/\/+$/, '');
-    const response = await fetch(`${backendUrl}/api/chat`, {
+    const candidate = state.items.find((item) => item.status === 'pending') || state.items.find((item) => item.status === 'considering') || null;
+    const data = await backendFetch('/api/chat', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(state.settings.sharedSecret ? { 'x-cartside-secret': state.settings.sharedSecret } : {}),
-      },
       body: JSON.stringify({
         sessionId: state.sessionId,
         messages: history.map(({ role, content: text }) => ({ role, content: text })),
-        state: {
-          items: state.items,
-          settings: {
-            budget: state.settings.budget,
-            currency: state.settings.currency,
-            bills: state.settings.bills || [],
-          },
-        },
+        state: publicState(),
+        item: candidate,
       }),
     });
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || `Backend returned ${response.status}`);
     const replies = (data.replies || []).map((reply) => ({ role: 'assistant', agent: reply.agent, content: reply.content, at: Date.now() }));
     state.chatMessages = [...history, ...replies].slice(-40);
+    $('providerState').textContent = data.decisionContext?.enabled ? 'JEV + CHAT' : 'CHAT';
     await chrome.storage.local.set({ chatMessages: state.chatMessages });
   } catch (error) {
-    state.chatMessages = [...history, { role: 'assistant', agent: 'Room', content: `I couldn't reach the budgeting agents: ${error.message}`, at: Date.now() }].slice(-40);
+    state.chatMessages = [...history, { role: 'assistant', agent: 'Room', content: readableNetworkError(error), at: Date.now() }].slice(-40);
+    $('providerState').textContent = 'OFFLINE';
     await chrome.storage.local.set({ chatMessages: state.chatMessages });
   } finally {
     setSending(false);
   }
 }
 
+function publicState() {
+  return {
+    items: state.items.map(({ evaluation, image, url, fingerprint, ...item }) => item),
+    settings: {
+      budget: state.settings.budget,
+      currency: state.settings.currency,
+      bills: state.settings.bills || [],
+    },
+  };
+}
+
+async function backendFetch(path, options = {}) {
+  const base = normalizeBackendUrl(state.settings.backendUrl || 'http://localhost:8787');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch(`${base}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'content-type': 'application/json',
+        ...(state.settings.sharedSecret ? { 'x-wiseshelf-secret': state.settings.sharedSecret } : {}),
+        ...(options.headers || {}),
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Backend returned ${response.status}`);
+    return data;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function normalizeBackendUrl(value) {
+  const url = new URL(String(value || '').trim());
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (!local && url.protocol !== 'https:') throw new Error('Remote backend must use HTTPS.');
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Backend URL must use HTTP or HTTPS.');
+  return url.toString().replace(/\/+$/, '');
+}
+
+function readableNetworkError(error) {
+  if (error?.name === 'AbortError') return 'The backend timed out. Check the connection and try again.';
+  return `WiseShelf could not complete the request: ${error?.message || 'Unknown error'}`;
+}
+
 function setSending(sending) {
   $('sendChat').disabled = sending;
   $('chatInput').disabled = sending;
-  $('sendChat').textContent = sending ? '…' : 'Send';
+  $('sendChat').textContent = sending ? '…' : 'SEND';
 }
 
 function openBudgetDialog() {
@@ -249,26 +358,28 @@ function openBudgetDialog() {
 function addBillRow(bill = {}) {
   const row = document.createElement('div');
   row.className = 'bill-row';
-  row.innerHTML = `
-    <input data-key="name" aria-label="Bill name" placeholder="Rent" value="${escapeAttr(bill.name || '')}">
-    <input data-key="amount" aria-label="Bill amount" type="number" min="0" step="0.01" placeholder="0" value="${escapeAttr(bill.amount ?? '')}">
-    <input data-key="dueDate" aria-label="Bill due date" type="date" value="${escapeAttr(bill.dueDate || '')}">
-    <button type="button" aria-label="Remove bill">×</button>`;
-  row.querySelector('button').addEventListener('click', () => row.remove());
+  const name = document.createElement('input');
+  name.dataset.key = 'name'; name.ariaLabel = 'Bill name'; name.placeholder = 'Rent'; name.value = bill.name || '';
+  const amount = document.createElement('input');
+  amount.dataset.key = 'amount'; amount.ariaLabel = 'Bill amount'; amount.type = 'number'; amount.min = '0'; amount.step = '0.01'; amount.placeholder = '0'; amount.value = bill.amount ?? '';
+  const due = document.createElement('input');
+  due.dataset.key = 'dueDate'; due.ariaLabel = 'Bill due date'; due.type = 'date'; due.value = bill.dueDate || '';
+  const remove = document.createElement('button');
+  remove.type = 'button'; remove.ariaLabel = 'Remove bill'; remove.textContent = '×'; remove.addEventListener('click', () => row.remove());
+  row.append(name, amount, due, remove);
   $('billRows').append(row);
 }
 
 async function saveBudgetDialog(event) {
   event.preventDefault();
   const bills = [...$('billRows').querySelectorAll('.bill-row')].map((row) => ({
-    name: row.querySelector('[data-key="name"]').value.trim(),
-    amount: Number(row.querySelector('[data-key="amount"]').value || 0),
+    name: row.querySelector('[data-key="name"]').value.trim().slice(0, 100),
+    amount: nonNegative(row.querySelector('[data-key="amount"]').value),
     dueDate: row.querySelector('[data-key="dueDate"]').value,
   })).filter((bill) => bill.name || bill.amount);
-
   const settings = {
     ...state.settings,
-    budget: Math.max(0, Number($('budgetInput').value || 0)),
+    budget: nonNegative($('budgetInput').value),
     currency: $('currencyInput').value,
     bills,
   };
@@ -278,32 +389,29 @@ async function saveBudgetDialog(event) {
 
 async function updateItem(fingerprint, patch) {
   const items = state.items.map((item) => item.fingerprint === fingerprint ? { ...item, ...patch, updatedAt: Date.now() } : item);
+  state.items = items;
   await chrome.storage.local.set({ items });
 }
 
 async function removeItem(fingerprint) {
-  await chrome.storage.local.set({ items: state.items.filter((item) => item.fingerprint !== fingerprint) });
+  const items = state.items.filter((item) => item.fingerprint !== fingerprint);
+  state.items = items;
+  await chrome.storage.local.set({ items });
 }
 
-function sumItems(items) {
-  return items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1), 0);
-}
-
-function money(value, currency) {
+function openItem(item) {
+  if (!item.url) return;
   try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(Number(value || 0));
-  } catch {
-    return `${currency} ${Number(value || 0).toFixed(2)}`;
-  }
+    const url = new URL(item.url);
+    if (!['http:', 'https:'].includes(url.protocol)) return;
+    chrome.tabs.create({ url: url.toString() });
+  } catch {}
 }
 
-function scrollChat() {
-  requestAnimationFrame(() => {
-    const log = $('chatLog');
-    log.scrollTop = log.scrollHeight;
-  });
+function sumItems(items) { return items.reduce((sum, item) => sum + nonNegative(item.price) * Math.max(1, Number(item.quantity || 1)), 0); }
+function nonNegative(value) { const number = Number(value); return Number.isFinite(number) && number >= 0 ? number : 0; }
+function money(value, currency) {
+  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(Number(value || 0)); }
+  catch { return `${currency} ${Number(value || 0).toFixed(2)}`; }
 }
-
-function escapeAttr(value) {
-  return String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
+function scrollChat() { requestAnimationFrame(() => { const log = $('chatLog'); log.scrollTop = log.scrollHeight; }); }
